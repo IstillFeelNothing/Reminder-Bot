@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+
+# Віртуальні оточення
+.venv/
+venv/
+/env/
+
+# Тести та інструменти
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Секрети та локальна конфігурація (токен бота)
+.env
+.env.*
+!.env.example
+
+# База даних SQLite
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Логи
+*.log
+
+# IDE / ОС
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Claude Code
+.claude/
+CLAUDE.md
