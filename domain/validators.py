@@ -9,7 +9,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
+from zoneinfo import ZoneInfo, available_timezones
 
 from domain.exceptions import (
     InvalidCalendarDateError,
@@ -44,10 +44,9 @@ def get_timezone(tz_name: str) -> ZoneInfo:
     """
     if tz_name not in _available_timezones():
         raise InvalidTimezoneError(f"Невідомий часовий пояс: {tz_name!r}")
-    try:
-        return ZoneInfo(tz_name)
-    except (ZoneInfoNotFoundError, ValueError) as exc:
-        raise InvalidTimezoneError(f"Невідомий часовий пояс: {tz_name!r}") from exc
+    # Збої середовища (пошкоджений/видалений tzdata) навмисно не ловимо:
+    # це інфраструктурна помилка, а не некоректне введення користувача.
+    return ZoneInfo(tz_name)
 
 
 def _localize(local_naive: datetime, tz: ZoneInfo) -> tuple[datetime, bool]:

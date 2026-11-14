@@ -200,6 +200,12 @@ def test_04_trigger_at_utc_output_format_contract() -> None:
         pytest.param(
             "2026-11-15 09:00", "Mars/Base", InvalidTimezoneError, id="25-unknown-timezone"
         ),
+        pytest.param(
+            "0001-01-01 00:00",
+            "Europe/Kyiv",
+            InvalidCalendarDateError,
+            id="28-min-year-utc-conversion-underflows",
+        ),
         pytest.param("", "Europe/Kyiv", InvalidDateTimeFormatError, id="26-empty-string"),
         pytest.param(
             "   ", "Europe/Kyiv", InvalidDateTimeFormatError, id="27-whitespace-only-string"
