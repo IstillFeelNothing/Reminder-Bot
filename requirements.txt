@@ -1,0 +1,2 @@
+# База IANA-поясів для zoneinfo (на Windows системної бази немає)
+tzdata
