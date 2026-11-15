@@ -91,11 +91,8 @@ def _parse_local_naive(text: str) -> datetime:
     last_error: ValueError | None = None
     for fmt in _INPUT_FORMATS:
         try:
-            # DTZ007 тут хибнопозитивний: правило вимагає %z, але користувач
-            # вводить настінний час без зсуву, а сам зсув залежить від DST і
-            # визначається лише в _localize() за IANA-поясом (fold=0, перевірка
-            # прогалини). Наївне значення — це і є намір користувача, який
-            # зберігається в local_datetime без зсуву.
+            # DTZ007 хибний: користувач вводить час без зсуву, пояс і DST
+            # застосовує _localize().
             return datetime.strptime(text, fmt)  # noqa: DTZ007
         except ValueError as exc:
             last_error = exc
