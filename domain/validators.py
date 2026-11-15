@@ -1,12 +1,13 @@
 """Валідація та конвертація дати/часу нагадування.
 
-Реалізовано: формати "YYYY-MM-DD HH:MM" і "DD.MM.YYYY HH:MM", нормалізація
-пробілів, валідація IANA-поясу (з урахуванням регістру), весняна прогалина DST
-(відхилення) та осіннє подвоєння (fold=0).
-Ще не реалізовано: доменні помилки формату/календаря, перевірка минулого часу
-та наївного now_utc.
+Реалізовано: формати "YYYY-MM-DD HH:MM" і "DD.MM.YYYY HH:MM" (день, місяць і
+година можуть бути без ведучого нуля: "5.1.2027 9:00"), нормалізація пробілів,
+розрізнення помилок формату та календаря, валідація IANA-поясу (з урахуванням
+регістру), весняна прогалина DST (відхилення) та осіннє подвоєння (fold=0).
+Ще не реалізовано: перевірка минулого часу та наївного now_utc.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
@@ -14,12 +15,20 @@ from zoneinfo import ZoneInfo, available_timezones
 
 from domain.exceptions import (
     InvalidCalendarDateError,
+    InvalidDateTimeFormatError,
     InvalidTimezoneError,
     NonExistentTimeError,
 )
 
+# Година й хвилина перевіряються вже на рівні форми: "24:00"/"25:00" — помилка
+# формату, а не календаря. День і місяць лише за формою (1–2 цифри): їх
+# існування (31.02, 29.02 у невисокосний рік) перевіряє конструктор datetime.
+_TIME = r"(?P<hour>[01]?\d|2[0-3]):(?P<minute>[0-5]\d)"
 # Порядок не важливий: роздільники дати ("-" проти ".") не перетинаються.
-_INPUT_FORMATS = ("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M")
+_INPUT_PATTERNS = (
+    re.compile(rf"(?P<year>\d{{4}})-(?P<month>\d{{1,2}})-(?P<day>\d{{1,2}}) {_TIME}", re.ASCII),
+    re.compile(rf"(?P<day>\d{{1,2}})\.(?P<month>\d{{1,2}})\.(?P<year>\d{{4}}) {_TIME}", re.ASCII),
+)
 _LOCAL_FORMAT = "%Y-%m-%dT%H:%M:%S"
 _UTC_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -85,19 +94,28 @@ def _normalize_whitespace(raw: str) -> str:
 def _parse_local_naive(text: str) -> datetime:
     """Парсить нормалізований рядок у наївний локальний datetime.
 
-    Якщо жоден формат не підійшов, прокидає ValueError від останньої спроби
-    (перетворення на доменні помилки формату/календаря — окремий крок).
+    Рядок не відповідає жодній формі → InvalidDateTimeFormatError.
+    Форма правильна, але дати не існує (29.02.2027, 31.02) → InvalidCalendarDateError.
     """
-    last_error: ValueError | None = None
-    for fmt in _INPUT_FORMATS:
+    for pattern in _INPUT_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
         try:
-            # DTZ007 хибний: користувач вводить час без зсуву, пояс і DST
-            # застосовує _localize().
-            return datetime.strptime(text, fmt)  # noqa: DTZ007
+            # DTZ001: наївний локальний час, пояс застосовує _localize().
+            return datetime(  # noqa: DTZ001
+                year=int(match["year"]),
+                month=int(match["month"]),
+                day=int(match["day"]),
+                hour=int(match["hour"]),
+                minute=int(match["minute"]),
+            )
         except ValueError as exc:
-            last_error = exc
-    assert last_error is not None  # _INPUT_FORMATS не порожній
-    raise last_error
+            raise InvalidCalendarDateError(f"Дати {text!r} не існує в календарі") from exc
+    raise InvalidDateTimeFormatError(
+        f"Не вдалося розпізнати дату/час {text!r}. "
+        "Очікується формат РРРР-ММ-ДД ГГ:ХХ або ДД.ММ.РРРР ГГ:ХХ."
+    )
 
 
 def parse_reminder_datetime(raw: str, tz_name: str, now_utc: datetime) -> ParsedDateTime:
