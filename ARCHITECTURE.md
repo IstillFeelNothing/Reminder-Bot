@@ -6,8 +6,8 @@
 
 | Файл / пакет | Відповідальність | Від кого залежить |
 | :--- | :--- | :--- |
-| `domain/models.py` | Незмінні сутності (`@dataclass(frozen=True)`): `User`, `Reminder` та `Enum` статусів `ReminderStatus` (`pending`, `sent`, `failed`) | — (тільки стандартна бібліотека) |
-| `domain/exceptions.py` | Доменні винятки: помилки формату дати/часу, минулий час, весняна прогалина DST, доступ до чужого запису (`AccessDeniedError`) та помилки доставки (`RecipientUnavailableError`, `RateLimitExceededError`, `TemporaryDeliveryError`) | — |
+| `domain/models.py` | Незмінні сутності (`@dataclass(frozen=True)`): `User`, `Reminder` та `StrEnum` статусів `ReminderStatus` (`pending`, `sent`, `failed`); `__post_init__` перевіряє лише консистентність стану (не бізнес-правила) | `domain/exceptions.py` (+ стандартна бібліотека) |
+| `domain/exceptions.py` | Доменні винятки: помилки формату дати/часу, минулий час, весняна прогалина DST, доступ до чужого запису (`AccessDeniedError`), невідоме значення поля збереженого нагадування (`InvalidReminderFieldError` з `reminder_id`, `user_id`, `field`, `value`) та помилки доставки (`RecipientUnavailableError`, `RateLimitExceededError`, `TemporaryDeliveryError`) | — |
 | `domain/validators.py` | Валідація тексту нагадування, парсинг дати/часу, виявлення неіснуючого часу під час переведення годинника, обчислення `trigger_at_utc` (`fold=0`) | `domain/exceptions.py` |
 | `domain/protocols.py` | Контракти (`typing.Protocol`): `UserRepositoryProtocol`, `ReminderRepositoryProtocol`, `UnitOfWorkProtocol`, `NotificationSenderProtocol` | `domain/models.py` |
 | `services/reminder_service.py` | Бізнес-логіка: створення нагадувань, перевірка прав власника (`user_id`), зміна поясу з масовим перерахунком UTC усередині `UnitOfWork` | `domain/models.py`, `domain/validators.py`, `domain/exceptions.py`, `domain/protocols.py` |
