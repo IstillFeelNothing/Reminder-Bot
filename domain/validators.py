@@ -30,14 +30,14 @@ _INPUT_PATTERNS = (
     re.compile(rf"(?P<year>\d{{4}})-(?P<month>\d{{1,2}})-(?P<day>\d{{1,2}}) {_TIME}", re.ASCII),
     re.compile(rf"(?P<day>\d{{1,2}})\.(?P<month>\d{{1,2}})\.(?P<year>\d{{4}}) {_TIME}", re.ASCII),
 )
-_LOCAL_FORMAT = "%Y-%m-%dT%H:%M:%S"
-_UTC_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 @dataclass(frozen=True, slots=True)
 class ParsedDateTime:
-    local_datetime: str
-    trigger_at_utc: str
+    # Наївний локальний час — намір користувача без прив'язки до поясу.
+    local_datetime: datetime
+    # Aware-момент у UTC. Перетворення в рядок БД — відповідальність репозиторію.
+    trigger_at_utc: datetime
     is_ambiguous: bool
 
 
@@ -145,7 +145,7 @@ def parse_reminder_datetime(raw: str, tz_name: str, now_utc: datetime) -> Parsed
         )
 
     return ParsedDateTime(
-        local_datetime=local_naive.strftime(_LOCAL_FORMAT),
-        trigger_at_utc=trigger_utc.strftime(_UTC_FORMAT),
+        local_datetime=local_naive,
+        trigger_at_utc=trigger_utc,
         is_ambiguous=is_ambiguous,
     )
