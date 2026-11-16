@@ -334,19 +334,23 @@ _SAME_INSTANT_AS_NOW = [
 
 @pytest.mark.parametrize("now", _SAME_INSTANT_AS_NOW)
 @pytest.mark.parametrize(
-    ("raw", "expected_error"),
+    "raw",
     [
-        pytest.param("2026-11-14 19:34", PastDateTimeError, id="41-past"),
-        pytest.param("2026-11-14 19:35", PastDateTimeError, id="41-equals-now"),
-        pytest.param("2026-11-14 19:36", None, id="41-one-minute-ahead"),
+        pytest.param("2026-11-14 19:34", id="41-one-minute-in-past"),
+        pytest.param("2026-11-14 19:35", id="41-equals-now"),
     ],
 )
-def test_41_any_aware_now_compared_by_instant(
-    raw: str, expected_error: type[Exception] | None, now: datetime
-) -> None:
-    if expected_error is None:
-        result = parse_reminder_datetime(raw, "Europe/Kyiv", now)
-        assert result.trigger_at_utc == "2026-11-14T17:36:00Z"
-    else:
-        with pytest.raises(expected_error):
-            parse_reminder_datetime(raw, "Europe/Kyiv", now)
+def test_41_any_aware_now_rejects_past_by_instant(raw: str, now: datetime) -> None:
+    with pytest.raises(PastDateTimeError) as exc_info:
+        parse_reminder_datetime(raw, "Europe/Kyiv", now)
+
+    assert exc_info.type is PastDateTimeError
+
+
+@pytest.mark.parametrize("now", _SAME_INSTANT_AS_NOW)
+def test_42_any_aware_now_accepts_future_by_instant(now: datetime) -> None:
+    result = parse_reminder_datetime("2026-11-14 19:36", "Europe/Kyiv", now)
+
+    assert result.local_datetime == "2026-11-14T19:36:00"
+    assert result.trigger_at_utc == "2026-11-14T17:36:00Z"
+    assert result.is_ambiguous is False
