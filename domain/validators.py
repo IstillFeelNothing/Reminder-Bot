@@ -3,8 +3,8 @@
 Реалізовано: формати "YYYY-MM-DD HH:MM" і "DD.MM.YYYY HH:MM" (день, місяць і
 година можуть бути без ведучого нуля: "5.1.2027 9:00"), нормалізація пробілів,
 розрізнення помилок формату та календаря, валідація IANA-поясу (з урахуванням
-регістру), весняна прогалина DST (відхилення) та осіннє подвоєння (fold=0).
-Ще не реалізовано: перевірка минулого часу та наївного now_utc.
+регістру), весняна прогалина DST (відхилення) та осіннє подвоєння (fold=0),
+відхилення моменту, не пізнішого за now_utc, і перевірка, що now_utc aware.
 """
 
 import re
@@ -18,6 +18,7 @@ from domain.exceptions import (
     InvalidDateTimeFormatError,
     InvalidTimezoneError,
     NonExistentTimeError,
+    PastDateTimeError,
 )
 
 # Година й хвилина перевіряються вже на рівні форми: "24:00"/"25:00" — помилка
@@ -119,6 +120,13 @@ def _parse_local_naive(text: str) -> datetime:
 
 
 def parse_reminder_datetime(raw: str, tz_name: str, now_utc: datetime) -> ParsedDateTime:
+    # Наївний now_utc — помилка викликаючого коду, а не введення користувача,
+    # тому перевіряємо першою і кидаємо ValueError, а не доменний виняток.
+    # Приймаємо будь-який aware-час: порівняння aware-значень іде за фізичним
+    # моментом, тож пояс, у якому представлено now_utc, не впливає на результат.
+    if now_utc.utcoffset() is None:
+        raise ValueError("now_utc має бути aware datetime")
+
     tz = get_timezone(tz_name)
     local_naive = _parse_local_naive(_normalize_whitespace(raw))
     try:
@@ -129,6 +137,12 @@ def parse_reminder_datetime(raw: str, tz_name: str, now_utc: datetime) -> Parsed
         raise InvalidCalendarDateError(
             f"Дата {local_naive:%Y-%m-%d} поза підтримуваним діапазоном"
         ) from exc
+
+    # "<=": нагадування на поточну хвилину вже не встигне спрацювати вчасно.
+    if trigger_utc <= now_utc:
+        raise PastDateTimeError(
+            f"Час {local_naive:%Y-%m-%d %H:%M} ({tz.key}) уже минув. Вкажіть майбутній час."
+        )
 
     return ParsedDateTime(
         local_datetime=local_naive.strftime(_LOCAL_FORMAT),
