@@ -8,7 +8,8 @@
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -311,3 +312,41 @@ def test_19_naive_now_utc_is_contract_violation() -> None:
 
     # Саме помилка контракту коду, а не доменний виняток валідації введення.
     assert exc_info.type is ValueError
+
+
+def test_19_naive_now_utc_is_checked_before_input_validation() -> None:
+    naive_now = datetime(2026, 11, 14, 17, 35)
+
+    # Навіть за некоректного введення першою спрацьовує перевірка контракту.
+    with pytest.raises(ValueError) as exc_info:
+        parse_reminder_datetime("сміття", "Mars/Base", naive_now)
+
+    assert exc_info.type is ValueError
+
+
+# Той самий фізичний момент, що й NOW_UTC, у різних представленнях.
+_SAME_INSTANT_AS_NOW = [
+    pytest.param(NOW_UTC.astimezone(ZoneInfo("Europe/Kyiv")), id="zoneinfo-kyiv"),
+    pytest.param(NOW_UTC.astimezone(ZoneInfo("America/New_York")), id="zoneinfo-new-york"),
+    pytest.param(NOW_UTC.astimezone(timezone(timedelta(hours=5, minutes=30))), id="fixed-offset"),
+]
+
+
+@pytest.mark.parametrize("now", _SAME_INSTANT_AS_NOW)
+@pytest.mark.parametrize(
+    ("raw", "expected_error"),
+    [
+        pytest.param("2026-11-14 19:34", PastDateTimeError, id="41-past"),
+        pytest.param("2026-11-14 19:35", PastDateTimeError, id="41-equals-now"),
+        pytest.param("2026-11-14 19:36", None, id="41-one-minute-ahead"),
+    ],
+)
+def test_41_any_aware_now_compared_by_instant(
+    raw: str, expected_error: type[Exception] | None, now: datetime
+) -> None:
+    if expected_error is None:
+        result = parse_reminder_datetime(raw, "Europe/Kyiv", now)
+        assert result.trigger_at_utc == "2026-11-14T17:36:00Z"
+    else:
+        with pytest.raises(expected_error):
+            parse_reminder_datetime(raw, "Europe/Kyiv", now)
