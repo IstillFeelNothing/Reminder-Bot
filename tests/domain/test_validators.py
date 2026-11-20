@@ -3,11 +3,12 @@
 Контракт функції `parse_reminder_datetime(raw, tz_name, now_utc)`:
 - вхід: рядок "YYYY-MM-DD HH:MM" або "DD.MM.YYYY HH:MM" (пробіли нормалізуються),
   IANA-пояс (case-sensitive за zoneinfo.available_timezones()), aware-момент now_utc;
-- вихід: `ParsedDateTime(local_datetime, trigger_at_utc, is_ambiguous)`;
+- вихід: `ParsedDateTime(local_datetime, trigger_at_utc, is_ambiguous)`, де
+  local_datetime — наївний datetime (намір користувача), trigger_at_utc — aware datetime у UTC;
+  формат зберігання в БД перевіряють тести репозиторію;
 - помилки: доменні винятки з domain/exceptions.py, ValueError — для наївного now_utc.
 """
 
-import re
 from datetime import UTC, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -25,8 +26,6 @@ from domain.validators import parse_reminder_datetime
 # 19:35 за Europe/Kyiv (UTC+2)
 NOW_UTC = datetime(2026, 11, 14, 17, 35, tzinfo=UTC)
 
-TRIGGER_AT_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-
 
 @pytest.mark.parametrize(
     ("raw", "tz_name", "local_datetime", "trigger_at_utc", "is_ambiguous"),
@@ -34,151 +33,148 @@ TRIGGER_AT_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
         pytest.param(
             "2026-11-15 09:00",
             "Europe/Kyiv",
-            "2026-11-15T09:00:00",
-            "2026-11-15T07:00:00Z",
+            datetime(2026, 11, 15, 9, 0),
+            datetime(2026, 11, 15, 7, 0, tzinfo=UTC),
             False,
             id="01-kyiv-winter-utc+2",
         ),
         pytest.param(
             "2027-06-15 09:00",
             "Europe/Kyiv",
-            "2027-06-15T09:00:00",
-            "2027-06-15T06:00:00Z",
+            datetime(2027, 6, 15, 9, 0),
+            datetime(2027, 6, 15, 6, 0, tzinfo=UTC),
             False,
             id="02-kyiv-summer-utc+3",
         ),
         pytest.param(
             "  15.11.2026   09:00  ",
             "Europe/Kyiv",
-            "2026-11-15T09:00:00",
-            "2026-11-15T07:00:00Z",
+            datetime(2026, 11, 15, 9, 0),
+            datetime(2026, 11, 15, 7, 0, tzinfo=UTC),
             False,
             id="03-ua-format-and-extra-spaces",
         ),
         pytest.param(
             "2026-11-15 21:30",
             "America/New_York",
-            "2026-11-15T21:30:00",
-            "2026-11-16T02:30:00Z",
+            datetime(2026, 11, 15, 21, 30),
+            datetime(2026, 11, 16, 2, 30, tzinfo=UTC),
             False,
             id="05-new-york-utc-date-rolls-forward",
         ),
         pytest.param(
             "2026-11-15 10:00",
             "Asia/Kolkata",
-            "2026-11-15T10:00:00",
-            "2026-11-15T04:30:00Z",
+            datetime(2026, 11, 15, 10, 0),
+            datetime(2026, 11, 15, 4, 30, tzinfo=UTC),
             False,
             id="06-kolkata-fractional-offset",
         ),
         pytest.param(
             "2027-03-28 04:00",
             "Europe/Kyiv",
-            "2027-03-28T04:00:00",
-            "2027-03-28T01:00:00Z",
+            datetime(2027, 3, 28, 4, 0),
+            datetime(2027, 3, 28, 1, 0, tzinfo=UTC),
             False,
             id="09-spring-gap-right-boundary",
         ),
         pytest.param(
             "2027-10-31 03:00",
             "Europe/Kyiv",
-            "2027-10-31T03:00:00",
-            "2027-10-31T00:00:00Z",
+            datetime(2027, 10, 31, 3, 0),
+            datetime(2027, 10, 31, 0, 0, tzinfo=UTC),
             True,
             id="10-autumn-fold-left-boundary",
         ),
         pytest.param(
             "2027-10-31 03:30",
             "Europe/Kyiv",
-            "2027-10-31T03:30:00",
-            "2027-10-31T00:30:00Z",
+            datetime(2027, 10, 31, 3, 30),
+            datetime(2027, 10, 31, 0, 30, tzinfo=UTC),
             True,
             id="11-autumn-fold-middle",
         ),
         pytest.param(
             "2027-10-31 04:00",
             "Europe/Kyiv",
-            "2027-10-31T04:00:00",
-            "2027-10-31T02:00:00Z",
+            datetime(2027, 10, 31, 4, 0),
+            datetime(2027, 10, 31, 2, 0, tzinfo=UTC),
             False,
             id="12-autumn-fold-right-boundary",
         ),
         pytest.param(
             "2026-11-14 15:00",
             "America/New_York",
-            "2026-11-14T15:00:00",
-            "2026-11-14T20:00:00Z",
+            datetime(2026, 11, 14, 15, 0),
+            datetime(2026, 11, 14, 20, 0, tzinfo=UTC),
             False,
             id="15-same-day-future-in-user-tz-not-past",
         ),
         pytest.param(
             "2027-03-28 02:59",
             "Europe/Kyiv",
-            "2027-03-28T02:59:00",
-            "2027-03-28T00:59:00Z",
+            datetime(2027, 3, 28, 2, 59),
+            datetime(2027, 3, 28, 0, 59, tzinfo=UTC),
             False,
             id="20-last-valid-minute-before-spring-gap",
         ),
         pytest.param(
             "2027-10-31 03:59",
             "Europe/Kyiv",
-            "2027-10-31T03:59:00",
-            "2027-10-31T00:59:00Z",
+            datetime(2027, 10, 31, 3, 59),
+            datetime(2027, 10, 31, 0, 59, tzinfo=UTC),
             True,
             id="21-autumn-fold-last-ambiguous-minute",
         ),
         pytest.param(
             "5.1.2027 9:00",
             "Europe/Kyiv",
-            "2027-01-05T09:00:00",
-            "2027-01-05T07:00:00Z",
+            datetime(2027, 1, 5, 9, 0),
+            datetime(2027, 1, 5, 7, 0, tzinfo=UTC),
             False,
             id="29-ua-format-without-leading-zeros",
         ),
         pytest.param(
             "2027-01-05 23:59",
             "Europe/Kyiv",
-            "2027-01-05T23:59:00",
-            "2027-01-05T21:59:00Z",
+            datetime(2027, 1, 5, 23, 59),
+            datetime(2027, 1, 5, 21, 59, tzinfo=UTC),
             False,
             id="30-max-valid-hour-and-minute",
         ),
         pytest.param(
             "2027-1-5 0:00",
             "Europe/Kyiv",
-            "2027-01-05T00:00:00",
-            "2027-01-04T22:00:00Z",
+            datetime(2027, 1, 5, 0, 0),
+            datetime(2027, 1, 4, 22, 0, tzinfo=UTC),
             False,
             id="35-iso-format-without-leading-zeros-midnight",
         ),
         pytest.param(
             "2027-01-05 20:00",
             "Europe/Kyiv",
-            "2027-01-05T20:00:00",
-            "2027-01-05T18:00:00Z",
+            datetime(2027, 1, 5, 20, 0),
+            datetime(2027, 1, 5, 18, 0, tzinfo=UTC),
             False,
             id="36-hour-20-boundary",
         ),
     ],
 )
 def test_valid_input_is_converted(
-    raw: str, tz_name: str, local_datetime: str, trigger_at_utc: str, is_ambiguous: bool
+    raw: str,
+    tz_name: str,
+    local_datetime: datetime,
+    trigger_at_utc: datetime,
+    is_ambiguous: bool,
 ) -> None:
     result = parse_reminder_datetime(raw, tz_name, NOW_UTC)
 
+    # naive == aware дає False, тож рівність заодно фіксує, що local_datetime наївний.
     assert result.local_datetime == local_datetime
     assert result.trigger_at_utc == trigger_at_utc
+    # Рівність aware-значень порівнює лише момент — окремо фіксуємо саме UTC.
+    assert result.trigger_at_utc.utcoffset() == timedelta(0)
     assert result.is_ambiguous is is_ambiguous
-
-
-def test_04_trigger_at_utc_output_format_contract() -> None:
-    result = parse_reminder_datetime("2026-11-15 09:00", "Europe/Kyiv", NOW_UTC)
-
-    assert len(result.trigger_at_utc) == 20
-    assert result.trigger_at_utc.endswith("Z")
-    assert "+00:00" not in result.trigger_at_utc
-    assert "." not in result.trigger_at_utc  # без мікросекунд
-    assert TRIGGER_AT_UTC_RE.fullmatch(result.trigger_at_utc)
 
 
 @pytest.mark.parametrize(
@@ -351,6 +347,6 @@ def test_41_any_aware_now_rejects_past_by_instant(raw: str, now: datetime) -> No
 def test_42_any_aware_now_accepts_future_by_instant(now: datetime) -> None:
     result = parse_reminder_datetime("2026-11-14 19:36", "Europe/Kyiv", now)
 
-    assert result.local_datetime == "2026-11-14T19:36:00"
-    assert result.trigger_at_utc == "2026-11-14T17:36:00Z"
+    assert result.local_datetime == datetime(2026, 11, 14, 19, 36)
+    assert result.trigger_at_utc == datetime(2026, 11, 14, 17, 36, tzinfo=UTC)
     assert result.is_ambiguous is False
