@@ -65,7 +65,7 @@ def test_01_status_values_match_db_check_constraint() -> None:
 
 def test_02_status_is_str_enum() -> None:
     # StrEnum: значення можна писати в БД і порівнювати з рядком без .value.
-    assert ReminderStatus.PENDING == "pending"
+    assert ReminderStatus.PENDING == "pending"  # type: ignore[comparison-overlap]
     assert isinstance(ReminderStatus.SENT, str)
 
 
