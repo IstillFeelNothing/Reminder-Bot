@@ -52,3 +52,15 @@ class User:
 
         if not _is_utc(self.created_at):
             raise ValueError("Поле created_at має бути aware у UTC.")
+
+
+@dataclass(frozen=True)
+class DueCursor:
+    """Позиція останнього елемента порції list_due: ключ (trigger_at_utc, id)."""
+
+    trigger_at_utc: datetime
+    reminder_id: int
+
+    def __post_init__(self) -> None:
+        if not _is_utc(self.trigger_at_utc):
+            raise ValueError("Поле trigger_at_utc має бути aware у UTC.")

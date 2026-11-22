@@ -10,7 +10,7 @@ from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Self
 
-from domain.models import Reminder, ReminderStatus, User
+from domain.models import DueCursor, Reminder, ReminderStatus, User
 
 
 class UserRepositoryProtocol(Protocol):
@@ -48,24 +48,37 @@ class ReminderRepositoryProtocol(Protocol):
         """Активні (pending) нагадування користувача, впорядковані за trigger_at_utc."""
         ...
 
-    async def list_due(self, now_utc: datetime) -> list[Reminder]:
-        """Нагадування зі status = pending і trigger_at_utc <= now_utc, за trigger_at_utc.
+    async def list_due(
+        self, now_utc: datetime, *, limit: int, after: DueCursor | None = None
+    ) -> list[Reminder]:
+        """Порція (до limit, limit >= 1) нагадувань зі status = pending і trigger_at_utc <= now_utc.
 
+        Порядок — ORDER BY trigger_at_utc, id. after — останній елемент попередньої
+        порції: повертаються лише записи з (trigger_at_utc, id) > (after.trigger_at_utc,
+        after.reminder_id). Так записи, що лишилися pending після тимчасової помилки,
+        не блокують решту черги в межах одного проходу.
         now_utc — aware datetime; перетворення в рядок БД — відповідальність репозиторію.
+        limit < 1 → ValueError (помилка викликаючого коду).
         """
         ...
 
-    async def update(self, reminder: Reminder) -> None:
+    async def update(self, reminder: Reminder) -> Reminder | None:
         """Оновлює text, local_datetime і trigger_at_utc запису з reminder.id.
 
-        Статус змінюється лише через set_status. Запису немає → нічого не змінюється.
+        Повертає запис у стані після оновлення або None, якщо запису вже немає
+        (видалено між get і update). Статус змінюється лише через set_status.
         """
         ...
 
-    async def set_status(self, reminder_id: int, status: ReminderStatus) -> None:
-        """Змінює статус (планувальник: після відправки → sent, після 403 → failed).
+    async def set_status(
+        self, reminder_id: int, status: ReminderStatus, *, expected_trigger_at_utc: datetime
+    ) -> bool:
+        """Умовно змінює статус (планувальник: після відправки → sent, після 403 → failed).
 
-        Запису немає (видалено під час відправки) → нічого не змінюється.
+        Оновлення відбувається лише якщо запис досі pending і його trigger_at_utc
+        дорівнює expected_trigger_at_utc — тобто його не перенесли під час відправки.
+        False — запис видалено, перенесено або статус уже змінено; тоді перенесене
+        нагадування лишається pending і спрацює в новий час.
         """
         ...
 
@@ -77,8 +90,9 @@ class ReminderRepositoryProtocol(Protocol):
 class UnitOfWorkProtocol(Protocol):
     """Транзакція над одним з'єднанням.
 
-    Використання: `async with uow: ...; await uow.commit()`.
-    Вихід із контексту без commit (зокрема через виняток) — rollback.
+    Використання: `async with uow: ...`.
+    Вихід із контексту без винятку — commit; з винятком — rollback, після чого
+    виняток поширюється далі (__aexit__ його не придушує).
     """
 
     @property
@@ -95,10 +109,6 @@ class UnitOfWorkProtocol(Protocol):
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None: ...
-
-    async def commit(self) -> None: ...
-
-    async def rollback(self) -> None: ...
 
 
 class NotificationSenderProtocol(Protocol):
