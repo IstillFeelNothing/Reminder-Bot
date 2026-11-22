@@ -1,7 +1,5 @@
 """Доменні винятки. Залежать лише від стандартної бібліотеки."""
 
-from typing import Any
-
 
 class DomainError(Exception):
     """Базовий клас усіх доменних винятків."""
@@ -34,7 +32,7 @@ class PastDateTimeError(ReminderValidationError):
 class InvalidReminderFieldError(DomainError):
     """Некоректне значення поля нагадування (наприклад, невідомий статус або дата з БД)."""
 
-    def __init__(self, reminder_id: int, user_id: int, field: str, value: Any) -> None:
+    def __init__(self, reminder_id: int, user_id: int, field: str, value: object) -> None:
         self.reminder_id = reminder_id
         self.user_id = user_id
         self.field = field
