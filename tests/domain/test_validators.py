@@ -1,4 +1,12 @@
-"""Тести валідації та конвертації дати/часу нагадування.
+"""Тести валідації введення нагадування: текст і дата/час.
+
+Контракт функції `validate_reminder_text(raw)`:
+- обрізає пробільні символи (включно з переносами рядків) лише на краях;
+- усередині тексту пробіли й переноси рядків зберігаються без змін;
+- довжина рахується після обрізання, у символах Python (code points);
+  допустимо 1..MAX_REMINDER_TEXT_LENGTH (1000) включно;
+- порожній після обрізання текст → EmptyReminderTextError,
+  довший за ліміт → ReminderTextTooLongError (обидва — ReminderValidationError).
 
 Контракт функції `parse_reminder_datetime(raw, tz_name, now_utc)`:
 - вхід: рядок "YYYY-MM-DD HH:MM" або "DD.MM.YYYY HH:MM" (пробіли нормалізуються),
@@ -15,13 +23,20 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from domain.exceptions import (
+    EmptyReminderTextError,
     InvalidCalendarDateError,
     InvalidDateTimeFormatError,
     InvalidTimezoneError,
     NonExistentTimeError,
     PastDateTimeError,
+    ReminderTextTooLongError,
+    ReminderValidationError,
 )
-from domain.validators import parse_reminder_datetime
+from domain.validators import (
+    MAX_REMINDER_TEXT_LENGTH,
+    parse_reminder_datetime,
+    validate_reminder_text,
+)
 
 # 19:35 за Europe/Kyiv (UTC+2)
 NOW_UTC = datetime(2026, 11, 14, 17, 35, tzinfo=UTC)
@@ -350,3 +365,84 @@ def test_42_any_aware_now_accepts_future_by_instant(now: datetime) -> None:
     assert result.local_datetime == datetime(2026, 11, 14, 19, 36)
     assert result.trigger_at_utc == datetime(2026, 11, 14, 17, 36, tzinfo=UTC)
     assert result.is_ambiguous is False
+
+
+# --- validate_reminder_text ---------------------------------------------------
+
+
+def test_43_max_reminder_text_length_is_1000() -> None:
+    assert MAX_REMINDER_TEXT_LENGTH == 1000
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param("Купити хліб", "Купити хліб", id="44-plain-text-unchanged"),
+        pytest.param("   Купити хліб   ", "Купити хліб", id="45-edge-spaces-stripped"),
+        pytest.param("\n\t Купити хліб \t\n", "Купити хліб", id="46-edge-newlines-tabs-stripped"),
+        pytest.param(" Купити хліб ", "Купити хліб", id="47-edge-nbsp-stripped"),
+        pytest.param("Купити   хліб", "Купити   хліб", id="48-inner-spaces-kept"),
+        pytest.param(
+            "Список:\n- хліб\n\n- молоко",
+            "Список:\n- хліб\n\n- молоко",
+            id="49-inner-newlines-kept",
+        ),
+        pytest.param(
+            "\n  Список:\n  - хліб  \n",
+            "Список:\n  - хліб",
+            id="50-inner-indent-kept-edges-stripped",
+        ),
+        pytest.param("Подзвонити мамі 📞", "Подзвонити мамі 📞", id="51-emoji-kept"),
+        pytest.param("x", "x", id="52-single-char"),
+    ],
+)
+def test_valid_reminder_text_is_normalized(raw: str, expected: str) -> None:
+    assert validate_reminder_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("a" * MAX_REMINDER_TEXT_LENGTH, id="53-exactly-limit"),
+        pytest.param("  " + "a" * MAX_REMINDER_TEXT_LENGTH + "\n\n", id="54-limit-after-strip"),
+        pytest.param("a\n" * 499 + "ab", id="55-limit-with-inner-newlines"),
+    ],
+)
+def test_reminder_text_at_limit_is_accepted(raw: str) -> None:
+    result = validate_reminder_text(raw)
+
+    assert len(result) == MAX_REMINDER_TEXT_LENGTH
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("", id="56-empty"),
+        pytest.param("   ", id="57-only-spaces"),
+        pytest.param("\n\t\r\n  ", id="58-only-whitespace-mixed"),
+    ],
+)
+def test_empty_reminder_text_is_rejected(raw: str) -> None:
+    with pytest.raises(EmptyReminderTextError):
+        validate_reminder_text(raw)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("a" * (MAX_REMINDER_TEXT_LENGTH + 1), id="59-one-over-limit"),
+        pytest.param("a\n" * 500 + "a", id="60-over-limit-counting-newlines"),
+        pytest.param("a" * 5000, id="61-far-over-limit"),
+    ],
+)
+def test_too_long_reminder_text_is_rejected(raw: str) -> None:
+    with pytest.raises(ReminderTextTooLongError) as exc_info:
+        validate_reminder_text(raw)
+
+    assert str(MAX_REMINDER_TEXT_LENGTH) in str(exc_info.value)
+
+
+def test_62_text_errors_are_validation_errors() -> None:
+    # Обробник діалогу ловить ReminderValidationError і показує повідомлення користувачу.
+    assert issubclass(EmptyReminderTextError, ReminderValidationError)
+    assert issubclass(ReminderTextTooLongError, ReminderValidationError)

@@ -12,7 +12,7 @@ class ReminderStatus(StrEnum):
 
 
 def _is_utc(dt: datetime) -> bool:
-    return dt.tzinfo is not None and dt.utcoffset() == timedelta(0)
+    return dt.utcoffset() == timedelta(0)
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class Reminder:
         if not self.text.strip():
             raise ValueError("Поле text не може бути порожнім.")
 
-        if self.local_datetime.tzinfo is not None and self.local_datetime.utcoffset() is not None:
+        if self.local_datetime.utcoffset() is not None:
             raise ValueError("Поле local_datetime має бути naive (без часового поясу).")
 
         if not _is_utc(self.trigger_at_utc):
