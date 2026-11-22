@@ -33,8 +33,9 @@ from typing import Any
 
 import pytest
 
-from domain.models import DueCursor, Reminder, ReminderStatus, User
+from domain.models import Reminder, ReminderStatus, User
 from domain.protocols import (
+    DueCursor,
     NotificationSenderProtocol,
     ReminderRepositoryProtocol,
     UnitOfWorkProtocol,

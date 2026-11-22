@@ -6,11 +6,24 @@
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Self
 
-from domain.models import DueCursor, Reminder, ReminderStatus, User
+from domain.models import Reminder, ReminderStatus, User
+
+
+@dataclass(frozen=True)
+class DueCursor:
+    """Позиція останнього елемента порції list_due: ключ (trigger_at_utc, id).
+
+    Будується з уже збереженого нагадування (trigger_at_utc перевірено моделлю),
+    тому власних перевірок не має.
+    """
+
+    trigger_at_utc: datetime
+    reminder_id: int
 
 
 class UserRepositoryProtocol(Protocol):

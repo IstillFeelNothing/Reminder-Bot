@@ -5,8 +5,6 @@
 - `Reminder` — `@dataclass(frozen=True)` з полями id (`int | None`, None — ще не збережено),
   user_id, chat_id, text, local_datetime, trigger_at_utc, status, created_at.
 - `User` — `@dataclass(frozen=True)` з полями user_id, timezone, created_at.
-- `DueCursor` — `@dataclass(frozen=True)` з полями trigger_at_utc, reminder_id: позиція
-  останнього елемента порції list_due; trigger_at_utc наївний або не UTC → ValueError.
 - `__post_init__` відхиляє лише стан, неконсистентний для системи; ValueError називає поле
   у повідомленні. Бізнес-правила (напр. «час не в минулому») перевіряє валідатор:
   - text порожній після strip → ValueError;
@@ -26,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from domain.models import DueCursor, Reminder, ReminderStatus, User
+from domain.models import Reminder, ReminderStatus, User
 
 NOW_UTC = datetime(2026, 11, 14, 17, 35, tzinfo=UTC)
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -211,35 +209,4 @@ def test_11_inconsistent_user_raises_value_error(overrides: dict[str, Any], fiel
         make_user(**overrides)
 
     # Саме ValueError, не підклас: порушення інваріанту — помилка коду, не доменна.
-    assert exc_info.type is ValueError
-
-
-# --- DueCursor --------------------------------------------------------------------
-
-
-def test_12_valid_due_cursor_keeps_fields() -> None:
-    cursor = DueCursor(trigger_at_utc=NOW_UTC, reminder_id=7)
-
-    assert cursor.trigger_at_utc == NOW_UTC
-    assert cursor.reminder_id == 7
-
-
-def test_13_due_cursor_is_frozen() -> None:
-    cursor = DueCursor(trigger_at_utc=NOW_UTC, reminder_id=7)
-
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        cursor.reminder_id = 8  # type: ignore[misc]
-
-
-@pytest.mark.parametrize(
-    "trigger_at_utc",
-    [
-        pytest.param(datetime(2026, 11, 14, 17, 35), id="14-naive-trigger"),
-        pytest.param(NOW_UTC.astimezone(KYIV), id="14-trigger-not-utc"),
-    ],
-)
-def test_14_due_cursor_rejects_non_utc_trigger(trigger_at_utc: datetime) -> None:
-    with pytest.raises(ValueError, match=r"\btrigger_at_utc\b") as exc_info:
-        DueCursor(trigger_at_utc=trigger_at_utc, reminder_id=7)
-
     assert exc_info.type is ValueError
