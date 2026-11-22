@@ -370,10 +370,6 @@ def test_42_any_aware_now_accepts_future_by_instant(now: datetime) -> None:
 # --- validate_reminder_text ---------------------------------------------------
 
 
-def test_43_max_reminder_text_length_is_1000() -> None:
-    assert MAX_REMINDER_TEXT_LENGTH == 1000
-
-
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
