@@ -11,7 +11,8 @@ from datetime import datetime
 from types import TracebackType
 from typing import Self
 
-from domain.models import DueCursor, Reminder, ReminderStatus, User
+from domain.models import Reminder, ReminderStatus, User
+from domain.protocols import DueCursor
 
 
 def _order_key(reminder: Reminder) -> tuple[datetime, int]:
