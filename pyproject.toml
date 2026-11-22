@@ -33,3 +33,5 @@ python_version = "3.12"
 strict = true
 warn_unreachable = true
 files = ["domain", "tests"]
+# tests/ — namespace-пакет: модулі імпортуються як tests.fakes, а не fakes.
+explicit_package_bases = true
