@@ -29,6 +29,14 @@ class PastDateTimeError(ReminderValidationError):
     """Момент спрацювання не пізніший за поточний."""
 
 
+class EmptyReminderTextError(ReminderValidationError):
+    """Текст нагадування порожній або складається лише з пробільних символів."""
+
+
+class ReminderTextTooLongError(ReminderValidationError):
+    """Текст нагадування після обрізання країв довший за допустимий ліміт."""
+
+
 class InvalidReminderFieldError(DomainError):
     """Некоректне значення поля нагадування (наприклад, невідомий статус або дата з БД)."""
 

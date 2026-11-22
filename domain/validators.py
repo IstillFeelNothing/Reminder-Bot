@@ -1,5 +1,9 @@
-"""Валідація та конвертація дати/часу нагадування.
+"""Валідація введення нагадування: текст і дата/час.
 
+Текст: обрізання пробільних символів на краях (усередині пробіли й переноси
+рядків зберігаються), ліміт MAX_REMINDER_TEXT_LENGTH символів.
+
+Дата/час:
 Реалізовано: формати "YYYY-MM-DD HH:MM" і "DD.MM.YYYY HH:MM" (день, місяць і
 година можуть бути без ведучого нуля: "5.1.2027 9:00"), нормалізація пробілів,
 розрізнення помилок формату та календаря, валідація IANA-поясу (з урахуванням
@@ -14,12 +18,16 @@ from functools import cache
 from zoneinfo import ZoneInfo, available_timezones
 
 from domain.exceptions import (
+    EmptyReminderTextError,
     InvalidCalendarDateError,
     InvalidDateTimeFormatError,
     InvalidTimezoneError,
     NonExistentTimeError,
     PastDateTimeError,
+    ReminderTextTooLongError,
 )
+
+MAX_REMINDER_TEXT_LENGTH = 1000
 
 # Година й хвилина перевіряються вже на рівні форми: "24:00"/"25:00" — помилка
 # формату, а не календаря. День і місяць лише за формою (1–2 цифри): їх
@@ -30,6 +38,25 @@ _INPUT_PATTERNS = (
     re.compile(rf"(?P<year>\d{{4}})-(?P<month>\d{{1,2}})-(?P<day>\d{{1,2}}) {_TIME}", re.ASCII),
     re.compile(rf"(?P<day>\d{{1,2}})\.(?P<month>\d{{1,2}})\.(?P<year>\d{{4}}) {_TIME}", re.ASCII),
 )
+
+
+def validate_reminder_text(raw: str) -> str:
+    """Повертає текст нагадування без пробільних символів на краях.
+
+    Пробіли й переноси рядків усередині тексту зберігаються як є.
+    Ліміт перевіряється після обрізання: краєві пробіли, які все одно буде
+    відкинуто, не мають призводити до відмови.
+    Порожній текст → EmptyReminderTextError, задовгий → ReminderTextTooLongError.
+    """
+    text = raw.strip()
+    if not text:
+        raise EmptyReminderTextError("Текст нагадування не може бути порожнім.")
+    if len(text) > MAX_REMINDER_TEXT_LENGTH:
+        raise ReminderTextTooLongError(
+            f"Текст нагадування задовгий: {len(text)} символів, "
+            f"максимум — {MAX_REMINDER_TEXT_LENGTH}."
+        )
+    return text
 
 
 @dataclass(frozen=True, slots=True)
